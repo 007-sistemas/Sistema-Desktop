@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Content Security Policy para permitir scripts locais no Electron -->
+    <!-- CRÍTICO: Permite WebSocket (ws/wss) e HTTPS do leitor DigitalPersona na porta 52181 -->
+    <!-- Observação: adicionamos connect-src explicitamente para evitar bloqueio de conexões do WebSDK -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data:; connect-src 'self' http://127.0.0.1:* https://127.0.0.1:* ws://127.0.0.1:* wss://127.0.0.1:* http://localhost:* https://localhost:* ws://localhost:* wss://localhost:*; script-src 'self' 'unsafe-inline' 'unsafe-eval' data:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';">
+    
+    <title>DigitAll - Controle de Produção</title>
+    
+    <!-- SDK Biometria Digital Persona 1.6 -->
+    <!-- Ordem importa: async/lib dependencies ANTES do fingerprint SDK -->
+    <script src="./js/es6-shim.js"></script>
+    <!-- WebSDK deve vir antes do Fingerprint SDK - dependência! -->
+    <script src="./js/websdk.client.bundle.min.js"></script>
+    <!-- Fingerprint SDK FINAL - depende do WebSDK estar pronto -->
+    <script src="./js/fingerprint.sdk.min.js"></script>
+    
+    <script>
+      // Desabilitar define global do AMD para evitar conflitos
+      window.define = null;
+      console.log('[main] Scripts de Biometria DigitalPersona 1.6 injetados via HTML');
+      
+      // Verificação robusta do carregamento do SDK
+      function checkFingerprintSdk() {
+        console.log('[main] Verificando SDK Fingerprint no window load...');
+        
+        if (window.Fingerprint && window.Fingerprint.WebApi) {
+            console.log('✅ SDK Fingerprint.WebApi carregado com sucesso.');
+            console.log('[main] WebApi disponível, comunicação com leitor 52181 está pronta.');
+        } else if (window.Fingerprint) {
+            console.warn('⚠️ window.Fingerprint existe mas WebApi não está disponível.');
+        } else {
+            console.warn('⚠️ window.Fingerprint não encontrado no onload. Tentando recuperar...');
+            // Tentar novamente em 2 segundos
+            setTimeout(function() {
+               if (window.Fingerprint && window.Fingerprint.WebApi) {
+                   console.log('✅ SDK Fingerprint carregado (atrasado, +2s).');
+               } else if (window.Fingerprint) {
+                   console.warn('⚠️ Fingerprint existe mas WebApi ainda não pronto.');
+               } else {
+                   console.error('❌ ERRO CRÍTICO: SDK Fingerprint não carregou após 2s. Verifique:');
+                   console.error('  1. Se os arquivos estão em public/js/');
+                   console.error('  2. Se o console mostra erros de carregamento');
+                   console.error('  3. Se o WebSdk.WebChannelClient foi criado');
+               }
+            }, 2000);
+        }
+      }
+      
+      // Executar verificação quando a página carregar
+      window.addEventListener('load', checkFingerprintSdk);
+      // Também executar imediatamente para dar feedback antecipado
+      document.addEventListener('DOMContentLoaded', function() {
+          setTimeout(checkFingerprintSdk, 100);
+      });
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.6",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "path": "https://aistudiocdn.com/path@^0.12.7"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
