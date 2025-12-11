@@ -16,6 +16,7 @@ export interface Biometria {
   id: string;
   fingerIndex: number; // 0-9 representing fingers
   hash: string; // FMD (Fingerprint Minutiae Data) or Simulated Hash
+  template?: string; // Raw template string for fuzzy matching
   createdAt: string;
 }
 

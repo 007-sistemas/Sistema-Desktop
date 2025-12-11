@@ -2,27 +2,40 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { StorageService } from './services/storage';
-import { CooperadoRegister } from './views/CooperadoRegister';
+import { biometryService } from './services/biometry';
 import { BiometriaManager } from './views/BiometriaManager';
 import { PontoMachine } from './views/PontoMachine';
-import { Dashboard } from './views/Dashboard';
-import { AuditLogViewer } from './views/AuditLogViewer';
-import { HospitalRegister } from './views/HospitalRegister';
-import { RelatorioProducao } from './views/RelatorioProducao';
-import { Management } from './views/Management';
 import { Login } from './views/Login';
-import { EspelhoBiometria } from './views/EspelhoBiometria'; 
-import { AutorizacaoPonto } from './views/AutorizacaoPonto';
 import { HospitalPermissions } from './types';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState('ponto');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userPermissions, setUserPermissions] = useState<HospitalPermissions | null>(null);
 
   useEffect(() => {
     StorageService.init();
     const session = StorageService.getSession();
+    // Ensure local WebSDK service is running when app starts (try to auto-start if not)
+    (async () => {
+      try {
+        const check = await biometryService.checkLocalService();
+        if (!check || !check.ok) {
+          const api: any = (window as any).biometry;
+          if (api && typeof api.invoke === 'function') {
+            try {
+              await api.invoke({ type: 'start-service' });
+              // give service a moment to be ready
+              await new Promise(r => setTimeout(r, 1200));
+            } catch (e) {
+              console.warn('[App] Não foi possível iniciar serviço automaticamente:', e);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[App] Erro ao verificar/iniciar WebSDK:', e);
+      }
+    })();
     if (session) {
       setIsAuthenticated(true);
       setUserPermissions(session.permissions);
@@ -45,7 +58,7 @@ export default function App() {
     StorageService.clearSession();
     setUserPermissions(null);
     setIsAuthenticated(false);
-    setCurrentView('dashboard'); 
+    setCurrentView('ponto'); 
   };
 
   const handleChangeView = (view: string) => {
@@ -65,17 +78,9 @@ export default function App() {
         return <div className="p-10 text-center text-gray-500">Acesso não autorizado.</div>;
     }
     switch(currentView) {
-      case 'dashboard': return <Dashboard />;
       case 'ponto': return <PontoMachine />;
-      case 'relatorio': return <RelatorioProducao />;
-      case 'espelho': return <EspelhoBiometria />; 
-      case 'autorizacao': return <AutorizacaoPonto />;
-      case 'cadastro': return <CooperadoRegister />;
-      case 'hospitais': return <HospitalRegister />;
       case 'biometria': return <BiometriaManager />;
-      case 'auditoria': return <AuditLogViewer />;
-      case 'gestao': return <Management />;
-      default: return <Dashboard />;
+      default: return <PontoMachine />;
     }
   };
 
@@ -85,7 +90,6 @@ export default function App() {
       onChangeView={handleChangeView} 
       onLogout={handleLogout}
       permissions={userPermissions || undefined}
-      isKiosk={false} 
     >
       {renderView()}
     </Layout>

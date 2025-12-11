@@ -44,22 +44,67 @@ export const BiometricCapture: React.FC = () => {
       }
   }, []);
 
+  // Periodic device check every 3 seconds to detect disconnections
+  useEffect(() => {
+      if (!isCapturing) {
+          const refreshTimer = setInterval(() => {
+              loadDevices().catch(() => {});
+          }, 3000);
+          return () => clearInterval(refreshTimer);
+      }
+  }, [isCapturing]);
+
   const loadDevices = async () => {
       setIsLoading(true);
       setError('');
       try {
+          console.log('[BiometricCapture] Enumerando dispositivos...');
           const devs = await biometryService.enumerateDevices();
+          console.log('[BiometricCapture] Dispositivos encontrados:', devs);
           setDevices(devs);
           if (devs.length > 0) {
               setSelectedDevice(devs[0]);
               setMessage(`Leitor detectado: ${devs[0]}`);
           } else {
+              console.warn('[BiometricCapture] Nenhum leitor detectado');
+              setSelectedDevice('');
               setMessage("Nenhum leitor encontrado. Verifique a conexão USB e o Driver.");
           }
       } catch (e: any) {
-          console.error(e);
+          console.error('[BiometricCapture] Erro ao enumerar:', e);
           setError("Erro ao comunicar com o serviço local.");
       } finally {
+          setIsLoading(false);
+      }
+  };
+
+  // Reset / start local WebSDK service then reload devices
+  const handleResetService = async () => {
+      setError('');
+      setIsLoading(true);
+      setMessage('Resetando serviço...');
+      try {
+          const api: any = (window as any).biometry;
+          if (!api || typeof api.invoke !== 'function') {
+              setError('API de preload indisponível');
+              setIsLoading(false);
+              return;
+          }
+          const res = await api.invoke({ type: 'start-service' });
+          if (res && res.ok) {
+              setMessage('Serviço iniciado. Aguardando...');
+              // Cleanup internal state and give time to service iniciar
+              try { biometryService.cleanup(); } catch (e) {}
+              await new Promise(r => setTimeout(r, 1200));
+              await loadDevices();
+              setIsLoading(false);
+          } else {
+              setError(res && res.error ? String(res.error) : 'Falha ao iniciar serviço');
+              setIsLoading(false);
+          }
+      } catch (e: any) {
+          console.error('[BiometricCapture] Erro ao resetar serviço:', e);
+          setError(String(e));
           setIsLoading(false);
       }
   };
@@ -125,8 +170,14 @@ export const BiometricCapture: React.FC = () => {
           await biometryService.stopAcquisition();
           setIsCapturing(false);
           setMessage("Captura parada.");
-          // Recarregar dispositivos para verificar se leitor ainda está disponível
-          await loadDevices();
+          // Recarregar dispositivos IMEDIATAMENTE para verificar se leitor ainda está disponível
+          setTimeout(async () => {
+              try {
+                  await loadDevices();
+              } catch (e) {
+                  console.warn('[BiometricCapture] Erro ao recarregar dispositivos:', e);
+              }
+          }, 100);
       } catch (e: any) {
           console.error('[BiometricCapture] Erro ao parar:', e);
           setIsCapturing(false);
@@ -202,14 +253,14 @@ export const BiometricCapture: React.FC = () => {
                           {devices.length === 0 && <option value="">Nenhum dispositivo</option>}
                           {devices.map(d => <option key={d} value={d}>{d}</option>)}
                       </select>
-                      <button 
-                        onClick={loadDevices}
-                        disabled={isCapturing}
-                        className="p-2 border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-gray-600"
-                        title="Atualizar Lista"
-                      >
-                          <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
-                      </button>
+                                            <button 
+                                                onClick={handleResetService}
+                                                disabled={isCapturing}
+                                                className="p-2 border border-gray-300 rounded bg-gray-50 hover:bg-gray-100 text-gray-600"
+                                                title="Resetar Serviço e Atualizar Lista"
+                                            >
+                                                    <RefreshCw className={`h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} />
+                                            </button>
                   </div>
               </div>
 

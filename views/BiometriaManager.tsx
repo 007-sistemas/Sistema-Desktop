@@ -26,13 +26,48 @@ export const BiometriaManager: React.FC = () => {
 
   const selectedCooperado = cooperados.find(c => c.id === selectedCooperadoId);
 
-  const handleScanSuccess = (hash: string) => {
+  const handleDeleteAllBiometrics = () => {
     if (!selectedCooperado) return;
+    
+    if (!confirm(`Tem certeza que deseja apagar TODAS as ${selectedCooperado.biometrias.length} digitais de ${selectedCooperado.nome}?`)) {
+      return;
+    }
+
+    const updatedCooperado = {
+      ...selectedCooperado,
+      biometrias: []
+    };
+
+    StorageService.saveCooperado(updatedCooperado);
+    StorageService.logAudit('EXCLUSAO_BIOMETRIAS', `Todas as biometrias de ${selectedCooperado.nome} foram apagadas`);
+    
+    // Atualizar estado local
+    setCooperados(prev => prev.map(c => c.id === updatedCooperado.id ? updatedCooperado : c));
+    
+    console.log('[BiometriaManager] 🗑️ Todas as digitais de', selectedCooperado.nome, 'foram apagadas');
+  };
+
+  const handleScanSuccess = (hash: string, template?: string) => {
+    if (!selectedCooperado) return;
+
+    console.log('[BiometriaManager] 📝 Cadastrando biometria (modo treinamento)...');
+    console.log('[BiometriaManager] Hash recebido:', hash.substring(0, 40) + '...');
+    console.log('[BiometriaManager] Cooperado:', selectedCooperado.nome);
+    console.log('[BiometriaManager] Biometrias já cadastradas:', selectedCooperado.biometrias.length);
+
+    // Verificar se já existe esse hash (evitar duplicatas exatas)
+    const jaExiste = selectedCooperado.biometrias.some(bio => bio.hash === hash);
+    if (jaExiste) {
+      console.log('[BiometriaManager] ⚠️ Hash já cadastrado, tente novamente');
+      alert('Esta leitura já foi cadastrada. Posicione o dedo novamente.');
+      return;
+    }
 
     const newBiometria: Biometria = {
       id: crypto.randomUUID(),
-      fingerIndex: selectedCooperado.biometrias.length + 1, // Simplified index logic
+      fingerIndex: selectedCooperado.biometrias.length + 1,
       hash: hash,
+      template: template,
       createdAt: new Date().toISOString()
     };
 
@@ -41,8 +76,22 @@ export const BiometriaManager: React.FC = () => {
       biometrias: [...selectedCooperado.biometrias, newBiometria]
     };
 
+    console.log('[BiometriaManager] Biometrias após adicionar:', updatedCooperado.biometrias.length);
+    
+    // Mensagem de progresso do treinamento
+    if (updatedCooperado.biometrias.length < 3) {
+      alert(`Amostra ${updatedCooperado.biometrias.length} cadastrada!\n\nRecomendação: Cadastre pelo menos 3 amostras do mesmo dedo para melhor reconhecimento.\n\nRestam: ${3 - updatedCooperado.biometrias.length} amostras`);
+    } else if (updatedCooperado.biometrias.length === 3) {
+      alert('✅ 3 amostras cadastradas!\n\nO reconhecimento já deve funcionar bem.\n\nVocê pode cadastrar mais 1-2 amostras para aumentar a precisão (opcional).');
+    }
+    
     StorageService.saveCooperado(updatedCooperado);
-    StorageService.logAudit('CADASTRO_BIOMETRIA', `Biometria adicionada para ${updatedCooperado.nome}`);
+    
+    // Verificar se salvou
+    const verificacao = StorageService.getCooperados().find(c => c.id === updatedCooperado.id);
+    console.log('[BiometriaManager] ✅ Verificação pós-save - Biometrias salvas:', verificacao?.biometrias.length);
+    
+    StorageService.logAudit('CADASTRO_BIOMETRIA', `Biometria ${updatedCooperado.biometrias.length} adicionada para ${updatedCooperado.nome}`);
     
     // Refresh local state
     setCooperados(prev => prev.map(c => c.id === updatedCooperado.id ? updatedCooperado : c));
@@ -128,6 +177,18 @@ export const BiometriaManager: React.FC = () => {
                     <span className="font-bold bg-primary-100 text-primary-700 px-2 py-0.5 rounded">
                       {selectedCooperado.biometrias.length}
                     </span>
+                  
+                                    {selectedCooperado.biometrias.length > 0 && selectedCooperado.biometrias.length < 3 && (
+                                      <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                                        ⚠️ <strong>Atenção:</strong> Para reconhecimento confiável, cadastre pelo menos <strong>3 amostras</strong> do mesmo dedo.
+                                      </div>
+                                    )}
+                  
+                                    {selectedCooperado.biometrias.length >= 3 && (
+                                      <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-700">
+                                        ✓ <strong>Cadastro completo!</strong> O reconhecimento está otimizado.
+                                      </div>
+                                    )}
                   </div>
                 </div>
               )}
@@ -149,7 +210,7 @@ export const BiometriaManager: React.FC = () => {
                       <ScannerMock 
                         onScanSuccess={handleScanSuccess} 
                         label="Clique no sensor para capturar"
-                        allowSimulation={true} // Habilitado para gestores testarem/simularem
+                        showServiceControls={false}
                       />
                       <div className="text-sm text-gray-600 space-y-2 max-w-xs">
                         <p className="flex items-start">
@@ -163,7 +224,19 @@ export const BiometriaManager: React.FC = () => {
 
                   {/* List of Registered Fingerprints */}
                   <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                     <h3 className="text-lg font-semibold text-gray-800 mb-4">Digitais Ativas</h3>
+                     <div className="flex items-center justify-between mb-4">
+                       <h3 className="text-lg font-semibold text-gray-800">Digitais Ativas</h3>
+                       {selectedCooperado.biometrias.length > 0 && (
+                         <button
+                           onClick={handleDeleteAllBiometrics}
+                           className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
+                           title="Apagar todas as digitais deste cooperado"
+                         >
+                           <Trash2 className="h-4 w-4" />
+                           Apagar Todas
+                         </button>
+                       )}
+                     </div>
                      {selectedCooperado.biometrias.length === 0 ? (
                        <p className="text-gray-500 italic">Nenhuma biometria cadastrada.</p>
                      ) : (

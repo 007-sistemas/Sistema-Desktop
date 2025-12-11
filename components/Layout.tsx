@@ -4,17 +4,8 @@ import {
   Users, 
   Fingerprint, 
   ClipboardCheck, 
-  LayoutDashboard, 
-  ShieldCheck, 
   Menu,
   LogOut,
-  Building2,
-  XCircle,
-  FileText,
-  Briefcase,
-  FileClock,
-  CheckSquare,
-  Wrench
 } from 'lucide-react';
 import { Hospital, HospitalPermissions } from '../types';
 
@@ -23,8 +14,6 @@ interface LayoutProps {
   currentView: string;
   onChangeView: (view: string) => void;
   onLogout: () => void;
-  isKiosk?: boolean;
-  kioskHospital?: Hospital;
   permissions?: HospitalPermissions; 
 }
 
@@ -33,23 +22,13 @@ export const Layout: React.FC<LayoutProps> = ({
   currentView, 
   onChangeView, 
   onLogout,
-  isKiosk = false,
-  kioskHospital,
   permissions
 }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
 
   const allNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permissionKey: 'dashboard' },
     { id: 'ponto', label: 'Registrar Produção', icon: ClipboardCheck, permissionKey: 'ponto' },
-    { id: 'relatorio', label: 'Relatório Detalhado', icon: FileText, permissionKey: 'relatorio' },
-    { id: 'espelho', label: 'Espelho da Biometria', icon: FileClock, permissionKey: 'espelho' },
-    { id: 'autorizacao', label: 'Justificativa de Plantão', icon: CheckSquare, permissionKey: 'autorizacao' },
-    { id: 'cadastro', label: 'Cooperados', icon: Users, permissionKey: 'cadastro' },
-    { id: 'hospitais', label: 'Hospitais & Setores', icon: Building2, permissionKey: 'hospitais' },
     { id: 'biometria', label: 'Biometria', icon: Fingerprint, permissionKey: 'biometria' },
-    { id: 'auditoria', label: 'Auditoria & Logs', icon: ShieldCheck, permissionKey: 'auditoria' },
-    { id: 'gestao', label: 'Gestão de Usuários', icon: Briefcase, permissionKey: 'gestao' },
   ];
 
   const navItems = allNavItems.filter(item => {
@@ -57,57 +36,9 @@ export const Layout: React.FC<LayoutProps> = ({
     return permissions[item.permissionKey as keyof HospitalPermissions] === true;
   });
 
-  const exitKioskMode = () => {
-    window.location.search = '';
-  };
-
   const handleLogoutClick = () => {
     onLogout();
   };
-
-  if (isKiosk) {
-    return (
-      <div className="flex flex-col h-screen bg-gray-50">
-        <header className="bg-primary-900 text-white shadow-lg p-6 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="bg-white p-2 rounded-full">
-               <ClipboardCheck className="h-8 w-8 text-primary-800" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold tracking-wide">DigitAll</h1>
-              {kioskHospital && (
-                <div className="flex items-center space-x-2 text-primary-200">
-                  <Building2 className="h-4 w-4" />
-                  <span className="font-medium text-sm bg-primary-800 px-2 py-0.5 rounded uppercase tracking-wider">
-                    {kioskHospital.nome}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          <button 
-            onClick={exitKioskMode}
-            className="flex items-center space-x-2 bg-primary-800 hover:bg-primary-700 text-white px-4 py-2 rounded border border-primary-700 text-sm transition-colors"
-            title="Voltar para painel administrativo"
-          >
-            <XCircle className="h-4 w-4" />
-            <span className="hidden sm:inline">Sair (Modo Admin)</span>
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-hidden p-6 flex flex-col items-center justify-center">
-          <div className="w-full max-w-4xl h-full flex flex-col justify-center">
-            {children}
-          </div>
-        </main>
-        
-        <footer className="p-4 text-center text-gray-400 text-xs">
-          Sistema de Controle de Produção &bull; DigitAll &bull; Modo Quiosque
-        </footer>
-      </div>
-    );
-  }
 
   return (
     <div className="flex h-screen bg-gray-100">

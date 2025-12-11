@@ -80,7 +80,35 @@ export const PontoMachine: React.FC = () => {
     return `${h.nome} - ${s ? s.nome : 'Setor não selecionado'}`;
   };
 
-  const handleIdentification = (hash: string) => {
+  const similarityDice = (a?: string, b?: string, k: number = 8, step: number = 2, maxLen: number = 80000) => {
+    if (!a || !b) return 0;
+    const cleanA = a.slice(0, maxLen);
+    const cleanB = b.slice(0, maxLen);
+    if (cleanA.length < k || cleanB.length < k) return 0;
+    const shingles = (str: string) => {
+      const arr: string[] = [];
+      for (let i = 0; i <= str.length - k; i += step) {
+        arr.push(str.substring(i, i + k));
+      }
+      return arr;
+    };
+    const aShingles = shingles(cleanA);
+    const bShingles = shingles(cleanB);
+    const counts = new Map<string, number>();
+    aShingles.forEach(s => counts.set(s, (counts.get(s) || 0) + 1));
+    let intersection = 0;
+    bShingles.forEach(s => {
+      const c = counts.get(s) || 0;
+      if (c > 0) {
+        intersection += 1;
+        counts.set(s, c - 1);
+      }
+    });
+    const score = (2 * intersection) / (aShingles.length + bShingles.length);
+    return score;
+  };
+
+  const handleIdentification = (hash: string, template?: string) => {
     // Usar Refs para validação para evitar problemas de closure stale
     const currentHospitalId = hospitalIdRef.current;
     const currentSetorId = setorIdRef.current;
@@ -98,9 +126,48 @@ export const PontoMachine: React.FC = () => {
 
     const allCooperados = StorageService.getCooperados();
     
-    // Simulate finding user with that hash
-    // In a real app, hash matching would happen on backend or secure module
-    const found = allCooperados.find(c => c.biometrias.length > 0) || allCooperados[0];
+    // VERIFICAÇÃO REAL: Comparar hash capturado com hashes cadastrados
+    console.log('[PontoMachine] 🔍 Verificando hash capturado:', hash.substring(0, 40) + '...');
+    console.log('[PontoMachine] Total de cooperados:', allCooperados.length);
+    
+    let bestCooperado: Cooperado | null = null;
+    let bestOverall = 0;
+    let bestHashMatch = false;
+
+    allCooperados.forEach(cooperado => {
+      console.log('[PontoMachine] Verificando cooperado:', cooperado.nome, '- Biometrias:', cooperado.biometrias?.length || 0);
+      if (!cooperado.biometrias || cooperado.biometrias.length === 0) {
+        return;
+      }
+
+      let localBest = 0;
+      let localHashMatch = false;
+
+      cooperado.biometrias.forEach((bio, idx) => {
+        const hashCadastrado = bio.hash.substring(0, 40);
+        const hashCapturado = hash.substring(0, 40);
+        const hashMatch = bio.hash === hash;
+        let similar = 0;
+        if (!hashMatch && template && bio.template) {
+          similar = similarityDice(bio.template, template);
+        }
+        if (hashMatch) localHashMatch = true;
+        if (similar > localBest) localBest = similar;
+        const lenA = bio.template?.length || 0;
+        const lenB = template?.length || 0;
+        console.log(`[PontoMachine]   Bio ${idx + 1}: ${hashCadastrado}... vs ${hashCapturado}... = ${hashMatch} | similar=${similar.toFixed(3)} | lenA=${lenA} lenB=${lenB}`);
+      });
+
+      if (localHashMatch || localBest > bestOverall) {
+        bestOverall = localBest;
+        bestCooperado = cooperado;
+        bestHashMatch = localHashMatch;
+      }
+    });
+
+    const threshold = 0.04; // ajustado com base nos scores reais observados
+    const found = (bestCooperado && (bestHashMatch || bestOverall >= threshold)) ? bestCooperado : null;
+    console.log('[PontoMachine] Resultado geral -> bestScore:', bestOverall.toFixed(3), 'hashMatch:', bestHashMatch, 'threshold:', threshold, 'found:', found?.nome);
     
     if (found) {
       setIdentifiedCooperado(found);
@@ -287,7 +354,7 @@ export const PontoMachine: React.FC = () => {
                   onScanSuccess={handleIdentification} 
                   isVerifying={true}
                   label={(!selectedHospitalId || !selectedSetorId) ? "Selecione o setor para liberar" : "Coloque o dedo para registrar"}
-                  allowSimulation={!isHospitalUser} 
+                  showServiceControls={false}
                 />
               </div>
               

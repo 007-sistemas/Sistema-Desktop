@@ -1,0 +1,22 @@
+directories:
+  output: dist_electron
+  buildResources: build
+appId: com.digitall.biometria
+productName: DigitAll
+copyright: Copyright © 2024 BioHealth
+files:
+  - filter:
+      - dist/**/*
+      - electron/**/*
+      - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: public/favicon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+electronVersion: 29.4.6
