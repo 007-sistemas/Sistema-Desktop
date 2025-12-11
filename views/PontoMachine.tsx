@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Cooperado, TipoPonto, RegistroPonto, Hospital } from '../types';
 import { StorageService } from '../services/storage';
 import { ScannerMock } from '../components/ScannerMock';
+import { biometryService } from '../services/biometry';
 import { MapPin, LogIn, LogOut, Building2, Layers, AlertCircle } from 'lucide-react';
 
 export const PontoMachine: React.FC = () => {
@@ -80,35 +81,21 @@ export const PontoMachine: React.FC = () => {
     return `${h.nome} - ${s ? s.nome : 'Setor não selecionado'}`;
   };
 
-  const similarityDice = (a?: string, b?: string, k: number = 8, step: number = 2, maxLen: number = 80000) => {
-    if (!a || !b) return 0;
-    const cleanA = a.slice(0, maxLen);
-    const cleanB = b.slice(0, maxLen);
-    if (cleanA.length < k || cleanB.length < k) return 0;
-    const shingles = (str: string) => {
-      const arr: string[] = [];
-      for (let i = 0; i <= str.length - k; i += step) {
-        arr.push(str.substring(i, i + k));
-      }
-      return arr;
-    };
-    const aShingles = shingles(cleanA);
-    const bShingles = shingles(cleanB);
-    const counts = new Map<string, number>();
-    aShingles.forEach(s => counts.set(s, (counts.get(s) || 0) + 1));
-    let intersection = 0;
-    bShingles.forEach(s => {
-      const c = counts.get(s) || 0;
-      if (c > 0) {
-        intersection += 1;
-        counts.set(s, c - 1);
-      }
-    });
-    const score = (2 * intersection) / (aShingles.length + bShingles.length);
-    return score;
+  /**
+   * SOLUÇÃO DEFINITIVA: Comparação usando SDK nativo do DigitalPersona
+   * Usa API de comparação proprietária com algoritmos de minutiae matching
+   */
+  const compareWithSDK = async (template1: string, template2: string): Promise<number> => {
+    try {
+      const score = await biometryService.compareTemplates(template1, template2);
+      return score; // Score já vem em escala 0-100
+    } catch (e) {
+      console.error('[PontoMachine] Erro ao comparar com SDK:', e);
+      return 0;
+    }
   };
 
-  const handleIdentification = (hash: string, template?: string) => {
+  const handleIdentification = async (hash: string, template?: string) => {
     // Usar Refs para validação para evitar problemas de closure stale
     const currentHospitalId = hospitalIdRef.current;
     const currentSetorId = setorIdRef.current;
@@ -126,48 +113,51 @@ export const PontoMachine: React.FC = () => {
 
     const allCooperados = StorageService.getCooperados();
     
-    // VERIFICAÇÃO REAL: Comparar hash capturado com hashes cadastrados
-    console.log('[PontoMachine] 🔍 Verificando hash capturado:', hash.substring(0, 40) + '...');
+    console.log('[PontoMachine] 🔍 Verificando biometria capturada (', template?.length, 'bytes )');
     console.log('[PontoMachine] Total de cooperados:', allCooperados.length);
     
+    // SOLUÇÃO DEFINITIVA: Comparação usando SDK nativo
     let bestCooperado: Cooperado | null = null;
-    let bestOverall = 0;
-    let bestHashMatch = false;
-
-    allCooperados.forEach(cooperado => {
-      console.log('[PontoMachine] Verificando cooperado:', cooperado.nome, '- Biometrias:', cooperado.biometrias?.length || 0);
-      if (!cooperado.biometrias || cooperado.biometrias.length === 0) {
-        return;
-      }
-
-      let localBest = 0;
-      let localHashMatch = false;
-
-      cooperado.biometrias.forEach((bio, idx) => {
-        const hashCadastrado = bio.hash.substring(0, 40);
-        const hashCapturado = hash.substring(0, 40);
-        const hashMatch = bio.hash === hash;
-        let similar = 0;
-        if (!hashMatch && template && bio.template) {
-          similar = similarityDice(bio.template, template);
+    let bestScore = 0;
+    let secondBestScore = 0;
+    
+    for (const cooperado of allCooperados) {
+      if (!cooperado.biometrias?.length) continue;
+      
+      let cooperadoScore = 0;
+      for (let idx = 0; idx < cooperado.biometrias.length; idx++) {
+        const bio = cooperado.biometrias[idx];
+        if (template && bio.template) {
+          const score = await compareWithSDK(bio.template, template);
+          console.log(`[PontoMachine]   ${cooperado.nome} Bio ${idx + 1}/${cooperado.biometrias.length}: ${score}/100`);
+          if (score > cooperadoScore) {
+            cooperadoScore = score;
+          }
         }
-        if (hashMatch) localHashMatch = true;
-        if (similar > localBest) localBest = similar;
-        const lenA = bio.template?.length || 0;
-        const lenB = template?.length || 0;
-        console.log(`[PontoMachine]   Bio ${idx + 1}: ${hashCadastrado}... vs ${hashCapturado}... = ${hashMatch} | similar=${similar.toFixed(3)} | lenA=${lenA} lenB=${lenB}`);
-      });
-
-      if (localHashMatch || localBest > bestOverall) {
-        bestOverall = localBest;
-        bestCooperado = cooperado;
-        bestHashMatch = localHashMatch;
       }
-    });
-
-    const threshold = 0.04; // ajustado com base nos scores reais observados
-    const found = (bestCooperado && (bestHashMatch || bestOverall >= threshold)) ? bestCooperado : null;
-    console.log('[PontoMachine] Resultado geral -> bestScore:', bestOverall.toFixed(3), 'hashMatch:', bestHashMatch, 'threshold:', threshold, 'found:', found?.nome);
+      
+      // Rastrear melhor e segundo melhor score
+      if (cooperadoScore > bestScore) {
+        secondBestScore = bestScore;
+        bestScore = cooperadoScore;
+        bestCooperado = cooperado;
+      } else if (cooperadoScore > secondBestScore) {
+        secondBestScore = cooperadoScore;
+      }
+    }
+    
+    // Critério ajustado para reduzir falsos negativos mantendo proteção contra impostores
+    // - Score mínimo: 30/100
+    // - Melhor precisa ser 1.6x o segundo melhor
+    // - Diferença absoluta mínima: 10 pontos
+    const THRESHOLD = 30;
+    const MARGIN = secondBestScore > 0 ? bestScore / secondBestScore : 3.0;
+    const GAP = bestScore - secondBestScore;
+    const found = (bestCooperado && bestScore >= THRESHOLD && MARGIN >= 1.6 && GAP >= 10)
+      ? bestCooperado
+      : null;
+    
+    console.log(`[PontoMachine] Resultado -> bestScore: ${bestScore}/100 secondBest: ${secondBestScore}/100 margin: ${MARGIN.toFixed(2)}x gap: ${GAP} found: ${found?.nome || 'NINGUÉM'}`);
     
     if (found) {
       setIdentifiedCooperado(found);

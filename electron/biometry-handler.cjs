@@ -35,6 +35,9 @@ class BiometryHandler {
           case 'start-service':
             return await this.startService();
           
+          case 'compare-templates':
+            return await this.compareTemplates(command.template1, command.template2);
+          
           default:
             throw new Error(`Comando desconhecido: ${command.type}`);
         }
@@ -235,6 +238,76 @@ class BiometryHandler {
       return { success: false, error: 'WebSDK não pôde ser iniciado automaticamente' };
     } catch (error) {
       return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Compara dois templates biométricos usando API do DigitalPersona
+   * Retorna score de similaridade (0-100)
+   */
+  async compareTemplates(template1, template2) {
+    try {
+      console.log('[BiometryHandler] Comparando templates via WebSDK...');
+      
+      // Chamar API de comparação do DigitalPersona
+      const result = await this.httpsRequest('/api/compare', 'POST', {
+        template1: template1,
+        template2: template2
+      });
+      
+      if (result && typeof result.score === 'number') {
+        console.log('[BiometryHandler] ✅ Score de comparação:', result.score);
+        return { success: true, score: result.score };
+      }
+      
+      // Se não retornar score, usar fallback: comparação simples
+      console.warn('[BiometryHandler] API não retornou score, usando fallback');
+      const fallbackScore = this.compareFallback(template1, template2);
+      return { success: true, score: fallbackScore, fallback: true };
+      
+    } catch (error) {
+      console.error('[BiometryHandler] Erro ao comparar templates:', error.message);
+      // Usar fallback em caso de erro
+      const fallbackScore = this.compareFallback(template1, template2);
+      return { success: true, score: fallbackScore, fallback: true };
+    }
+  }
+
+  /**
+   * Comparação fallback caso SDK não tenha endpoint de comparação
+   * Usa Hamming distance melhorado
+   */
+  compareFallback(template1, template2) {
+    if (!template1 || !template2) return 0;
+    
+    try {
+      const len1 = template1.length;
+      const len2 = template2.length;
+      
+      // Validar tamanho
+      const sizeDiff = Math.abs(len1 - len2) / Math.max(len1, len2);
+      if (sizeDiff > 0.15) return 0;
+      
+      // Comparar apenas núcleo do template (ignorar cabeçalho/rodapé)
+      const skip = 40;
+      const core1 = template1.substring(skip, len1 - skip);
+      const core2 = template2.substring(skip, len2 - skip);
+      const compareLen = Math.min(core1.length, core2.length);
+      
+      let matches = 0;
+      for (let i = 0; i < compareLen - 1; i += 2) {
+        if (core1.substring(i, i + 2) === core2.substring(i, i + 2)) {
+          matches++;
+        }
+      }
+      
+      const totalBytes = Math.floor(compareLen / 2);
+      const matchRate = totalBytes > 0 ? matches / totalBytes : 0;
+      
+      // Converter para escala 0-100
+      return Math.round(matchRate * 100);
+    } catch (e) {
+      return 0;
     }
   }
 

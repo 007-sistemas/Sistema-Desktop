@@ -290,6 +290,38 @@ export class DigitalPersonaService {
       return { ok: false, error: String(e) };
     }
   }
+
+  /**
+   * Compara dois templates biométricos usando SDK nativo do DigitalPersona
+   * Retorna: score de 0-100 (quanto maior, mais similar)
+   */
+  public async compareTemplates(template1: string, template2: string): Promise<number> {
+    try {
+      const api: any = (window as any).biometry;
+      if (!api || typeof api.invoke !== 'function') {
+        console.error('[BiometryService] API nativa não disponível para comparação');
+        return 0;
+      }
+
+      console.log('[BiometryService] 🔍 Comparando templates via SDK nativo...');
+      const result = await api.invoke({ 
+        type: 'compare-templates',
+        template1,
+        template2
+      });
+
+      if (result && typeof result.score === 'number') {
+        console.log('[BiometryService] Score de comparação:', result.score);
+        return result.score;
+      }
+
+      console.warn('[BiometryService] Resposta inesperada do SDK:', result);
+      return 0;
+    } catch (e: any) {
+      console.error('[BiometryService] Erro ao comparar templates:', e);
+      return 0;
+    }
+  }
 }
 
 // Instância singleton

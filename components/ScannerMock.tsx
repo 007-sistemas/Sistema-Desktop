@@ -110,8 +110,8 @@ export const ScannerMock: React.FC<ScannerMockProps> = ({
         }
       });
 
-      // Configurar formato de amostra - Raw é binário puro (mais determinístico)
-      biometryService.setSampleFormat(SampleFormat.Raw);
+      // Configurar formato de amostra - Intermediate/FMD é o melhor para comparação
+      biometryService.setSampleFormat(SampleFormat.Intermediate);
       
       // ENTÃO iniciar aquisição (sem deviceId = usa primeiro leitor disponível)
       console.log('[ScannerMock] Iniciando aquisição com formato Raw (binário)...');

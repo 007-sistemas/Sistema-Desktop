@@ -1,8 +1,8 @@
 version: 1.0.0
 files:
   - url: DigitAll-Setup-1.0.0.exe
-    sha512: 97pVRYVor8HpPn+hN2Atu74eQJ6IE4Y/JgXOP5NetP6TeRaq5W7xgR0z0lwNW2OvYTBFNv7vQTgB8svDavvmEQ==
-    size: 80430081
+    sha512: 9vaxe4rBB/1DeK7GN5F1TpBqcvaot6aqhCJKAVRH/+VSPbH+Mp5YLxJoUHlL/md4M9LcRg2AzFB44GC0jZdHCQ==
+    size: 80430394
 path: DigitAll-Setup-1.0.0.exe
-sha512: 97pVRYVor8HpPn+hN2Atu74eQJ6IE4Y/JgXOP5NetP6TeRaq5W7xgR0z0lwNW2OvYTBFNv7vQTgB8svDavvmEQ==
-releaseDate: '2025-12-10T20:58:37.679Z'
+sha512: 9vaxe4rBB/1DeK7GN5F1TpBqcvaot6aqhCJKAVRH/+VSPbH+Mp5YLxJoUHlL/md4M9LcRg2AzFB44GC0jZdHCQ==
+releaseDate: '2025-12-11T20:50:50.040Z'
